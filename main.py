@@ -8,6 +8,7 @@ from apscheduler.triggers.cron import CronTrigger
 from telegram import Bot
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
+from telegram.request import HTTPXRequest
 
 from clients.prometheus import PrometheusClient
 from clients.truenas import TrueNASClient
@@ -85,7 +86,13 @@ async def main():
     if not bot_cfg.chat_id:
         raise ValueError("TELEGRAM_CHAT_ID не задан в .env")
 
-    bot = Bot(token=bot_cfg.token)
+    if bot_cfg.proxy_url:
+        logger.info("Telegram Bot API через прокси: %s", bot_cfg.proxy_url)
+        http_request = HTTPXRequest(proxy=bot_cfg.proxy_url)
+    else:
+        http_request = HTTPXRequest()
+
+    bot = Bot(token=bot_cfg.token, request=http_request)
     prom = PrometheusClient(prom_cfg)
     tn = TrueNASClient(tn_cfg)
 

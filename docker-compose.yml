@@ -4,5 +4,5 @@ services:
     container_name: tg_monitor_bot
     restart: unless-stopped
     env_file: .env
-    # Бот не слушает входящие соединения, сеть нужна только для исходящих запросов
-    network_mode: host
+    # bridge-сеть по умолчанию: работает на Windows, macOS и Linux
+    # Prometheus и TrueNAS задаются через IP в .env — контейнер достучится по ним через NAT

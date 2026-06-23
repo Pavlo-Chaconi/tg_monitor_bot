@@ -25,10 +25,11 @@ class TrueNASConfig:
 @dataclass
 class BotConfig:
     token: str = ""
-    # ID чата или канала куда слать отчёты (например -100xxxxxxxxxx для группы)
     chat_id: str = ""
-    # Список chat_id администраторов (могут получать ответы на ошибки)
     admin_ids: List[str] = field(default_factory=list)
+    # Прокси для Telegram API (нужен, если api.telegram.org заблокирован)
+    # Форматы: socks5://host:port  http://host:port  socks5://user:pass@host:port
+    proxy_url: str = ""
 
 
 @dataclass
@@ -46,6 +47,7 @@ def load_config() -> tuple[BotConfig, PrometheusConfig, TrueNASConfig, Scheduler
         token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
         chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
         admin_ids=[x.strip() for x in os.getenv("TELEGRAM_ADMIN_IDS", "").split(",") if x.strip()],
+        proxy_url=os.getenv("TELEGRAM_PROXY_URL", ""),
     )
     prometheus = PrometheusConfig(
         url=os.getenv("PROMETHEUS_URL", "http://localhost:9090"),

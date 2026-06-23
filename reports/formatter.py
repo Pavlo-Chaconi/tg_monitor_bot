@@ -1,4 +1,5 @@
 """Форматирование данных в читаемые Telegram-сообщения (HTML)."""
+import html
 from datetime import timedelta
 from typing import Optional
 
@@ -46,7 +47,7 @@ def format_prometheus_report(data: dict) -> str:
         return "\n".join(lines)
 
     for inst, m in instances.items():
-        lines.append(f"\n<b>🖥 {inst}</b>")
+        lines.append(f"\n<b>🖥 {html.escape(inst)}</b>")
 
         cpu = m.get("cpu")
         if cpu is not None:
@@ -84,8 +85,8 @@ def format_prometheus_report(data: dict) -> str:
         for d in disks:
             pct = d["used_pct"]
             lines.append(
-                f"  {_pct_emoji(pct)} <code>{d['mountpoint']}</code> "
-                f"на {d['instance']} — {pct}% {_bar(pct, 8)}"
+                f"  {_pct_emoji(pct)} <code>{html.escape(d['mountpoint'])}</code> "
+                f"на {html.escape(d['instance'])} — {pct}% {_bar(pct, 8)}"
             )
 
     return "\n".join(lines)
@@ -98,9 +99,9 @@ def format_truenas_report(data: dict) -> str:
     sysinfo = data.get("system", {})
     if sysinfo:
         lines.append(
-            f"  <b>{sysinfo.get('hostname', '?')}</b> | {sysinfo.get('version', '?')}\n"
+            f"  <b>{html.escape(str(sysinfo.get('hostname', '?')))}</b> | {html.escape(str(sysinfo.get('version', '?')))}\n"
             f"  Uptime: {_uptime_str(sysinfo.get('uptime_seconds'))}\n"
-            f"  CPU: {sysinfo.get('cpu_model', '?')} ({sysinfo.get('physical_cores', '?')} ядер)"
+            f"  CPU: {html.escape(str(sysinfo.get('cpu_model', '?')))} ({sysinfo.get('physical_cores', '?')} ядер)"
         )
 
     # Пулы
@@ -110,7 +111,7 @@ def format_truenas_report(data: dict) -> str:
         for p in pools:
             health_icon = "🟢" if p["healthy"] else "🔴"
             lines.append(
-                f"  {health_icon} <b>{p['name']}</b>  [{p['status']}]\n"
+                f"  {health_icon} <b>{html.escape(p['name'])}</b>  [{html.escape(p['status'])}]\n"
                 f"    Использовано: {p['used_gb']}/{p['size_gb']} ГБ "
                 f"({p['used_pct']}%) {_bar(p['used_pct'], 8)}\n"
                 f"    Свободно: {p['free_gb']} ГБ"
@@ -124,7 +125,7 @@ def format_truenas_report(data: dict) -> str:
             temp = t.get("temp")
             icon = _temp_emoji(temp)
             temp_str = f"{temp}°C" if temp is not None else "—"
-            lines.append(f"  {icon} <code>{t['name']}</code>: {temp_str}")
+            lines.append(f"  {icon} <code>{html.escape(t['name'])}</code>: {temp_str}")
 
     # Алерты TrueNAS
     alerts = data.get("alerts", [])
@@ -133,7 +134,7 @@ def format_truenas_report(data: dict) -> str:
         for a in alerts:
             level = a.get("level", "INFO")
             icon = {"CRITICAL": "🔴", "ERROR": "🔴", "WARNING": "🟡", "INFO": "ℹ️"}.get(level, "❔")
-            lines.append(f"  {icon} [{level}] {a.get('title', '?')}")
+            lines.append(f"  {icon} [{html.escape(level)}] {html.escape(a.get('title', '?'))}")
     else:
         lines.append("\n  <i>Алертов нет</i>")
 
