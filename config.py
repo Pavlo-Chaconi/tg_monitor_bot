@@ -7,6 +7,25 @@ load_dotenv()
 
 
 @dataclass
+class MailboxConfig:
+    label: str
+    imap_server: str
+    imap_port: int
+    username: str
+    password: str
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.username and self.password)
+
+
+@dataclass
+class EmailConfig:
+    mailboxes: List[MailboxConfig]
+    check_interval_hours: int = 6
+
+
+@dataclass
 class PrometheusConfig:
     url: str = ""
     username: str = ""
@@ -44,7 +63,7 @@ class SchedulerConfig:
     webhook_port: int = 8080
 
 
-def load_config() -> tuple[BotConfig, PrometheusConfig, TrueNASConfig, SchedulerConfig]:
+def load_config() -> tuple[BotConfig, PrometheusConfig, TrueNASConfig, SchedulerConfig, EmailConfig]:
     bot = BotConfig(
         token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
         chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
@@ -68,4 +87,22 @@ def load_config() -> tuple[BotConfig, PrometheusConfig, TrueNASConfig, Scheduler
         timezone=os.getenv("TIMEZONE", "Europe/Moscow"),
         webhook_port=int(os.getenv("WEBHOOK_PORT", "8080")),
     )
-    return bot, prometheus, truenas, scheduler
+
+    mailboxes: List[MailboxConfig] = []
+    for i in (1, 2):
+        username = os.getenv(f"MAIL{i}_USERNAME", "")
+        if not username:
+            continue
+        mailboxes.append(MailboxConfig(
+            label=os.getenv(f"MAIL{i}_LABEL", f"Ящик {i}"),
+            imap_server=os.getenv(f"MAIL{i}_IMAP_SERVER", "imap.yandex.ru"),
+            imap_port=int(os.getenv(f"MAIL{i}_IMAP_PORT", "993")),
+            username=username,
+            password=os.getenv(f"MAIL{i}_PASSWORD", ""),
+        ))
+    email_cfg = EmailConfig(
+        mailboxes=mailboxes,
+        check_interval_hours=int(os.getenv("MAIL_CHECK_INTERVAL_HOURS", "6")),
+    )
+
+    return bot, prometheus, truenas, scheduler, email_cfg
