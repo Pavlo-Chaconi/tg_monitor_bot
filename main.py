@@ -2,6 +2,7 @@
 import asyncio
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -51,7 +52,7 @@ async def send_report(bot: Bot, chat_id: str, prom: PrometheusClient, tn: TrueNA
         # Алерты — отправляем отдельным сообщением, не ждём плановый отчёт
         await send_alerts(bot, chat_id, prom_data, tn_data)
 
-        now = datetime.now().strftime("%d.%m.%Y %H:%M")
+        now = datetime.now(tz=ZoneInfo(sched_cfg.timezone)).strftime("%d.%m.%Y %H:%M")
         text = format_full_report(
             prom_data,
             tn_data,
