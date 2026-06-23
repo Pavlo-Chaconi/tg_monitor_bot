@@ -1,4 +1,4 @@
-"""Точка входа: Telegram-бот с плановыми отчётами."""
+"""Точка входа: Telegram-бот с плановыми отчётами и алертами."""
 import asyncio
 import logging
 from datetime import datetime
@@ -10,11 +10,14 @@ from telegram.constants import ParseMode
 from telegram.error import TelegramError
 from telegram.request import HTTPXRequest
 
+from alerts import send_alerts
 from clients.prometheus import PrometheusClient
 from clients.truenas import TrueNASClient
 from collector import collect_prometheus, collect_truenas
 from config import load_config
 from reports.formatter import format_full_report
+from webhook import start_webhook_server
+import restic_store
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,13 +25,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Подавляем лишние логи httpx
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
+logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
 
 async def send_report(bot: Bot, chat_id: str, prom: PrometheusClient, tn: TrueNASClient):
-    """Собирает данные и отправляет отчёт в чат."""
+    """Собирает данные, проверяет пороги и отправляет плановый отчёт."""
     logger.info("Сбор данных для отчёта...")
     try:
         prom_data, tn_data = await asyncio.gather(
@@ -45,10 +48,17 @@ async def send_report(bot: Bot, chat_id: str, prom: PrometheusClient, tn: TrueNA
             logger.error("TrueNAS сбор упал: %s", tn_data)
             tn_data = {"system": {}, "pools": [], "temperatures": [], "alerts": []}
 
-        now = datetime.now().strftime("%d.%m.%Y %H:%M")
-        text = format_full_report(prom_data, tn_data, now)
+        # Алерты — отправляем отдельным сообщением, не ждём плановый отчёт
+        await send_alerts(bot, chat_id, prom_data, tn_data)
 
-        # Telegram ограничивает длину сообщения — делим на части по 4096 символов
+        now = datetime.now().strftime("%d.%m.%Y %H:%M")
+        text = format_full_report(
+            prom_data,
+            tn_data,
+            now,
+            restic_results=restic_store.all_results(),
+        )
+
         for chunk in _split_message(text):
             await bot.send_message(
                 chat_id=chat_id,
@@ -69,7 +79,6 @@ def _split_message(text: str, max_len: int = 4096) -> list[str]:
     chunks = []
     while text:
         chunk = text[:max_len]
-        # Стараемся не разрезать посередине тега — режем по последнему \n
         cut = chunk.rfind("\n")
         if cut > 0:
             chunk = chunk[:cut]
@@ -92,12 +101,15 @@ async def main():
     else:
         http_request = HTTPXRequest()
 
-    bot = Bot(token=bot_cfg.token, request=http_request)
+    bot  = Bot(token=bot_cfg.token, request=http_request)
     prom = PrometheusClient(prom_cfg)
-    tn = TrueNASClient(tn_cfg)
+    tn   = TrueNASClient(tn_cfg)
 
     me = await bot.get_me()
     logger.info("Бот запущен: @%s", me.username)
+
+    # HTTP-сервер для приёма push-событий (restic и др.)
+    webhook_runner = await start_webhook_server(bot, bot_cfg.chat_id, sched_cfg.webhook_port)
 
     scheduler = AsyncIOScheduler(timezone=sched_cfg.timezone)
     scheduler.add_job(
@@ -119,13 +131,13 @@ async def main():
         sched_cfg.timezone,
     )
 
-    # Отправляем первый отчёт сразу при старте
     await send_report(bot, bot_cfg.chat_id, prom, tn)
 
     try:
         await asyncio.Event().wait()
     finally:
         scheduler.shutdown()
+        await webhook_runner.cleanup()
         await prom.close()
         await tn.close()
 

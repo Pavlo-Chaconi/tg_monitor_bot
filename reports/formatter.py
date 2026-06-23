@@ -156,7 +156,30 @@ def format_truenas_report(data: dict) -> str:
     return "\n".join(lines)
 
 
-def format_full_report(prometheus_data: dict, truenas_data: dict, timestamp: str) -> str:
+def format_restic_report(results: list[dict]) -> str:
+    """Секция с состоянием restic-бэкапов."""
+    if not results:
+        return ""
+    lines = ["\n<b>📦 Restic — бэкапы</b>"]
+    for r in results:
+        status = r.get("status", "?")
+        icon   = "🟢" if status == "ok" else "🔴"
+        host   = html.escape(r.get("host", "?"))
+        ts     = html.escape(r.get("timestamp", "?"))
+        lines.append(f"  {icon} <code>{host}</code>  [{ts}]")
+        if status != "ok":
+            log_tail = r.get("log", "")[-400:].strip()
+            if log_tail:
+                lines.append(f"<pre>{html.escape(log_tail)}</pre>")
+    return "\n".join(lines)
+
+
+def format_full_report(
+    prometheus_data: dict,
+    truenas_data: dict,
+    timestamp: str,
+    restic_results: list | None = None,
+) -> str:
     parts = [
         f"<b>📋 Отчёт о состоянии инфраструктуры</b>\n🕐 {timestamp}",
         "",
@@ -164,4 +187,7 @@ def format_full_report(prometheus_data: dict, truenas_data: dict, timestamp: str
         "",
         format_truenas_report(truenas_data),
     ]
+    restic_section = format_restic_report(restic_results or [])
+    if restic_section:
+        parts.append(restic_section)
     return "\n".join(parts)

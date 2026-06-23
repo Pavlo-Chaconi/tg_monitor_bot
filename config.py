@@ -40,6 +40,8 @@ class SchedulerConfig:
     report_minute: str = "0"
     # Часовой пояс
     timezone: str = "Europe/Moscow"
+    # Порт HTTP-вебхука для приёма событий от restic и др.
+    webhook_port: int = 8080
 
 
 def load_config() -> tuple[BotConfig, PrometheusConfig, TrueNASConfig, SchedulerConfig]:
@@ -64,5 +66,6 @@ def load_config() -> tuple[BotConfig, PrometheusConfig, TrueNASConfig, Scheduler
         report_hour=os.getenv("REPORT_HOUR", "*"),
         report_minute=os.getenv("REPORT_MINUTE", "0"),
         timezone=os.getenv("TIMEZONE", "Europe/Moscow"),
+        webhook_port=int(os.getenv("WEBHOOK_PORT", "8080")),
     )
     return bot, prometheus, truenas, scheduler

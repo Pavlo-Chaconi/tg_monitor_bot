@@ -4,5 +4,9 @@ services:
     container_name: tg_monitor_bot
     restart: unless-stopped
     env_file: .env
+    ports:
+      - "8080:8080"   # webhook для restic и других внешних систем
+    volumes:
+      - ./data:/app/data   # персистентность restic_results.json между перезапусками
     # bridge-сеть по умолчанию: работает на Windows, macOS и Linux
     # Prometheus и TrueNAS задаются через IP в .env — контейнер достучится по ним через NAT

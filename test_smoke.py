@@ -60,11 +60,17 @@ def test_formatter():
         "temperatures": [{"name": "sda", "temp": 38}, {"name": "sdb", "temp": 52}],
         "alerts": [],
     }
-    msg = format_full_report(prom_data, tn_data, "23.06.2026 12:00")
+    restic_data = [
+        {"host": "backup-01", "status": "ok",    "timestamp": "23.06.2026 03:00:00", "log": "snapshot abc123 saved"},
+        {"host": "backup-02", "status": "error",  "timestamp": "23.06.2026 03:05:00", "log": "Fatal: unable to open repo"},
+    ]
+    msg = format_full_report(prom_data, tn_data, "23.06.2026 12:00", restic_results=restic_data)
     assert "<b>📋 Отчёт" in msg
     assert "server1:9100" in msg
     assert "truenas" in msg
     assert "tank" in msg
+    assert "backup-01" in msg
+    assert "backup-02" in msg
 
 check("format_full_report()", test_formatter)
 
