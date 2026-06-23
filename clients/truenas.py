@@ -34,6 +34,15 @@ class TrueNASClient:
             logger.warning("TrueNAS GET %s failed: %s", path, e)
             return None
 
+    async def _post(self, path: str, json=None) -> Optional[dict | list]:
+        try:
+            r = await self._client.post(f"{self._base}{path}", json=json)
+            r.raise_for_status()
+            return r.json()
+        except Exception as e:
+            logger.warning("TrueNAS POST %s failed: %s", path, e)
+            return None
+
     # ─── Системная информация ─────────────────────────────────────────────────
 
     async def system_info(self) -> dict:
@@ -137,14 +146,15 @@ class TrueNASClient:
 
     async def disk_temperatures(self) -> list[dict]:
         """Температуры дисков через S.M.A.R.T."""
-        data = await self._get("/disk/temperatures") or {}
+        disk_list = await self._get("/disk") or []
+        names = [d["name"] for d in disk_list if d.get("name")]
+        if not names:
+            return []
+        data = await self._post("/disk/temperatures", json=names) or {}
         temps = []
         if isinstance(data, dict):
             for disk_name, temp in data.items():
                 temps.append({"name": disk_name, "temp": temp})
-        elif isinstance(data, list):
-            for item in data:
-                temps.append({"name": item.get("disk", "?"), "temp": item.get("temperature")})
         return temps
 
     async def smart_results(self) -> list[dict]:
