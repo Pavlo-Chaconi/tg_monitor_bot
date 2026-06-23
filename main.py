@@ -31,7 +31,7 @@ logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
 
-async def send_report(bot: Bot, chat_id: str, prom: PrometheusClient, tn: TrueNASClient):
+async def send_report(bot: Bot, chat_id: str, prom: PrometheusClient, tn: TrueNASClient, timezone: str = "Europe/Moscow"):
     """Собирает данные, проверяет пороги и отправляет плановый отчёт."""
     logger.info("Сбор данных для отчёта...")
     try:
@@ -52,7 +52,7 @@ async def send_report(bot: Bot, chat_id: str, prom: PrometheusClient, tn: TrueNA
         # Алерты — отправляем отдельным сообщением, не ждём плановый отчёт
         await send_alerts(bot, chat_id, prom_data, tn_data)
 
-        now = datetime.now(tz=ZoneInfo(sched_cfg.timezone)).strftime("%d.%m.%Y %H:%M")
+        now = datetime.now(tz=ZoneInfo(timezone)).strftime("%d.%m.%Y %H:%M")
         text = format_full_report(
             prom_data,
             tn_data,
@@ -120,7 +120,7 @@ async def main():
             minute=sched_cfg.report_minute,
             timezone=sched_cfg.timezone,
         ),
-        args=[bot, bot_cfg.chat_id, prom, tn],
+        args=[bot, bot_cfg.chat_id, prom, tn, sched_cfg.timezone],
         id="hourly_report",
         replace_existing=True,
     )
@@ -132,7 +132,7 @@ async def main():
         sched_cfg.timezone,
     )
 
-    await send_report(bot, bot_cfg.chat_id, prom, tn)
+    await send_report(bot, bot_cfg.chat_id, prom, tn, sched_cfg.timezone)
 
     try:
         await asyncio.Event().wait()
