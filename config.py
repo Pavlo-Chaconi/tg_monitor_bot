@@ -94,7 +94,7 @@ def load_config() -> tuple[BotConfig, PrometheusConfig, TrueNASConfig, Scheduler
         if not username:
             continue
         mailboxes.append(MailboxConfig(
-            label=os.getenv(f"MAIL{i}_LABEL", f"Ящик {i}"),
+            label=os.getenv(f"MAIL{i}_LABEL", username),
             imap_server=os.getenv(f"MAIL{i}_IMAP_SERVER", "imap.yandex.ru"),
             imap_port=int(os.getenv(f"MAIL{i}_IMAP_PORT", "993")),
             username=username,

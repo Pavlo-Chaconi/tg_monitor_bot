@@ -166,6 +166,9 @@ async def check_all_mailboxes(
             continue
         found = await loop.run_in_executor(None, _check_mailbox_sync, cfg, 7, True)
         for item in found:
+            days_left = item["days_left"]
+            if days_left is not None and days_left > 7:
+                continue
             try:
                 await bot.send_message(
                     chat_id=chat_id,
@@ -178,7 +181,7 @@ async def check_all_mailboxes(
 
 
 async def get_billing_summary(mailboxes: list[MailboxConfig]) -> str:
-    """Проверка всех ящиков за 30 дней — без cooldown, для команды /billing."""
+    """Проверка всех ящиков за 7 дней — без cooldown, для команды /billing."""
     loop = asyncio.get_running_loop()
     lines = ["<b>Мониторинг оплаты Яндекс 360</b>\n"]
 
@@ -187,14 +190,14 @@ async def get_billing_summary(mailboxes: list[MailboxConfig]) -> str:
             lines.append(f"⚪ <code>{cfg.label}</code> — нет учётных данных")
             continue
         try:
-            found = await loop.run_in_executor(None, _check_mailbox_sync, cfg, 30, False)
+            found = await loop.run_in_executor(None, _check_mailbox_sync, cfg, 7, False)
             if found:
                 for item in found:
                     days_str = f"осталось {item['days_left']} дн." if item["days_left"] else "срок неизвестен"
                     dl = f" (до {item['deadline']})" if item["deadline"] else ""
                     lines.append(f"⚠️ <code>{cfg.label}</code> — {days_str}{dl}")
             else:
-                lines.append(f"✅ <code>{cfg.label}</code> — писем об оплате нет (30 дней)")
+                lines.append(f"✅ <code>{cfg.label}</code> — писем об оплате нет (7 дней)")
         except Exception as e:
             lines.append(f"❌ <code>{cfg.label}</code> — ошибка подключения: {e}")
 
