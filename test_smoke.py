@@ -39,9 +39,11 @@ def test_formatter():
     prom_data = {
         "instances": {
             "server1:9100": {
-                "cpu": 42.3, "mem_pct": 67.1,
-                "mem_total": 16.0, "mem_avail": 5.3,
-                "load1": 1.23, "uptime": 3661,
+                "cpu": 42.3, "vm_cpu": 35.1,
+                "mem_pct": None, "mem_total": None,
+                "mem_avail": 436.2, "mem_pressure": 0.34,
+                "vm_ok": 14, "vm_crit": 0,
+                "load1": None, "uptime": None,
                 "net_rx": 1.5, "net_tx": 0.3,
                 "io_read": 0.8, "io_write": 0.2,
             }

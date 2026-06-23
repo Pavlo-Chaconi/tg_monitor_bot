@@ -50,15 +50,23 @@ def format_prometheus_report(data: dict) -> str:
         lines.append(f"\n<b>🖥 {html.escape(inst)}</b>")
 
         cpu = m.get("cpu")
+        vm_cpu = m.get("vm_cpu")
         if cpu is not None:
-            lines.append(f"  CPU:    {_pct_emoji(cpu)} {cpu}% {_bar(cpu)}")
+            vm_part = f"  (ВМ: {vm_cpu}%)" if vm_cpu is not None else ""
+            lines.append(f"  CPU:    {_pct_emoji(cpu)} {cpu}%{vm_part} {_bar(cpu)}")
 
+        # Стандартные метрики RAM (node_exporter)
         mem_pct = m.get("mem_pct")
         mem_total = m.get("mem_total")
         mem_avail = m.get("mem_avail")
         if mem_pct is not None:
             mem_info = f"{round(mem_total - mem_avail, 2)}/{mem_total} ГБ" if mem_total and mem_avail else ""
             lines.append(f"  RAM:    {_pct_emoji(mem_pct)} {mem_pct}% {_bar(mem_pct)}  {mem_info}")
+        elif mem_avail is not None:
+            # HyperV: только свободная память и давление
+            pressure = m.get("mem_pressure")
+            prs_str = f"  давление: {round(pressure * 100)}%" if pressure is not None else ""
+            lines.append(f"  RAM св: {mem_avail} ГБ{prs_str}")
 
         load = m.get("load1")
         if load is not None:
@@ -67,6 +75,13 @@ def format_prometheus_report(data: dict) -> str:
         uptime = m.get("uptime")
         if uptime is not None:
             lines.append(f"  Uptime: {_uptime_str(uptime)}")
+
+        # ВМ (только HyperV)
+        vm_ok = m.get("vm_ok", 0)
+        vm_crit = m.get("vm_crit", 0)
+        if vm_ok or vm_crit:
+            vm_icon = "🟢" if vm_crit == 0 else "🔴"
+            lines.append(f"  ВМ:     {vm_icon} {vm_ok} ok  {vm_crit} critical")
 
         rx = m.get("net_rx")
         tx = m.get("net_tx")
