@@ -103,3 +103,59 @@ async def send_alerts(bot: Bot, chat_id: str, prom_data: dict, tn_data: dict) ->
         logger.warning("Отправлено %d алертов", len(msgs))
     except Exception as e:
         logger.error("Ошибка отправки алертов: %s", e)
+
+
+def collect_alert_lines(prom_data: dict, tn_data: dict) -> list[str]:
+    """Возвращает список алерт-строк без cooldown — для ответа на /alerts."""
+    msgs: list[str] = []
+
+    for inst, m in prom_data.get("instances", {}).items():
+        si = html_mod.escape(inst)
+        cpu = m.get("cpu")
+        if cpu is not None and cpu >= CPU_CRIT:
+            msgs.append(f"🔴 <b>CPU критично</b> на <code>{si}</code>: {cpu}%")
+        vm_crit = m.get("vm_crit", 0)
+        if vm_crit:
+            msgs.append(f"🔴 <b>ВМ в критическом состоянии</b> на <code>{si}</code>: {vm_crit} шт")
+        pressure = m.get("mem_pressure")
+        if pressure is not None:
+            if pressure >= MEM_PRES_CRIT:
+                msgs.append(f"🔴 <b>RAM давление критично</b> на <code>{si}</code>: {round(pressure*100)}%")
+            elif pressure >= MEM_PRES_WARN:
+                msgs.append(f"🟡 <b>RAM давление высокое</b> на <code>{si}</code>: {round(pressure*100)}%")
+        mem_pct = m.get("mem_pct")
+        if mem_pct is not None and mem_pct >= MEM_PCT_CRIT:
+            msgs.append(f"🔴 <b>RAM критично</b> на <code>{si}</code>: {mem_pct}%")
+
+    for d in prom_data.get("disks", []):
+        pct = d.get("used_pct", 0)
+        mp  = html_mod.escape(d.get("mountpoint", "?"))
+        si  = html_mod.escape(d.get("instance", "?"))
+        if pct >= DISK_CRIT:
+            msgs.append(f"🔴 <b>Диск почти полон</b> <code>{mp}</code> ({si}): {pct}%")
+        elif pct >= DISK_WARN:
+            msgs.append(f"🟡 <b>Диск заполнен</b> <code>{mp}</code> ({si}): {pct}%")
+
+    for p in tn_data.get("pools", []):
+        if not p.get("healthy") or p.get("status") != "ONLINE":
+            msgs.append(
+                f"🔴 <b>ZFS пул деградирован</b>: "
+                f"<code>{html_mod.escape(p['name'])}</code> [{html_mod.escape(p.get('status','?'))}]"
+            )
+
+    for t in tn_data.get("temperatures", []):
+        temp = t.get("temp")
+        name = t.get("name", "?")
+        sn   = html_mod.escape(name)
+        if temp is None:
+            continue
+        if temp >= TEMP_CRIT:
+            msgs.append(f"🔴 <b>Диск перегрет</b> <code>{sn}</code>: {temp}°C")
+        elif temp >= TEMP_WARN:
+            msgs.append(f"🟡 <b>Температура диска высокая</b> <code>{sn}</code>: {temp}°C")
+
+    for a in tn_data.get("alerts", []):
+        if a.get("level") in ("CRITICAL", "ERROR"):
+            msgs.append(f"🔴 <b>TrueNAS алерт</b>: {html_mod.escape(a.get('title','?'))}")
+
+    return msgs

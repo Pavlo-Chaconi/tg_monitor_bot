@@ -1,20 +1,21 @@
 """Точка входа: Telegram-бот с плановыми отчётами и алертами."""
 import asyncio
+import functools
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from telegram import Bot
 from telegram.constants import ParseMode
 from telegram.error import TelegramError
-from telegram.request import HTTPXRequest
+from telegram.ext import Application, ApplicationBuilder, CommandHandler
 
 from alerts import send_alerts
 from clients.prometheus import PrometheusClient
 from clients.truenas import TrueNASClient
 from collector import collect_prometheus, collect_truenas
+from commands import cmd_alerts, cmd_help, cmd_report, cmd_restic
 from config import load_config
 from reports.formatter import format_full_report
 from webhook import start_webhook_server
@@ -31,7 +32,7 @@ logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logging.getLogger("aiohttp").setLevel(logging.WARNING)
 
 
-async def send_report(bot: Bot, chat_id: str, prom: PrometheusClient, tn: TrueNASClient, timezone: str = "Europe/Moscow"):
+async def send_report(bot, chat_id: str, prom: PrometheusClient, tn: TrueNASClient, timezone: str = "Europe/Moscow"):
     """Собирает данные, проверяет пороги и отправляет плановый отчёт."""
     logger.info("Сбор данных для отчёта...")
     try:
@@ -49,7 +50,6 @@ async def send_report(bot: Bot, chat_id: str, prom: PrometheusClient, tn: TrueNA
             logger.error("TrueNAS сбор упал: %s", tn_data)
             tn_data = {"system": {}, "pools": [], "temperatures": [], "alerts": []}
 
-        # Алерты — отправляем отдельным сообщением, не ждём плановый отчёт
         await send_alerts(bot, chat_id, prom_data, tn_data)
 
         now = datetime.now(tz=ZoneInfo(timezone)).strftime("%d.%m.%Y %H:%M")
@@ -96,20 +96,39 @@ async def main():
     if not bot_cfg.chat_id:
         raise ValueError("TELEGRAM_CHAT_ID не задан в .env")
 
+    builder = ApplicationBuilder().token(bot_cfg.token)
     if bot_cfg.proxy_url:
         logger.info("Telegram Bot API через прокси: %s", bot_cfg.proxy_url)
-        http_request = HTTPXRequest(proxy=bot_cfg.proxy_url)
-    else:
-        http_request = HTTPXRequest()
+        builder = builder.proxy(bot_cfg.proxy_url).get_updates_proxy(bot_cfg.proxy_url)
+    application: Application = builder.build()
+    bot = application.bot
 
-    bot  = Bot(token=bot_cfg.token, request=http_request)
     prom = PrometheusClient(prom_cfg)
     tn   = TrueNASClient(tn_cfg)
 
     me = await bot.get_me()
     logger.info("Бот запущен: @%s", me.username)
 
-    # HTTP-сервер для приёма push-событий (restic и др.)
+    application.bot_data.update({
+        "chat_id":     bot_cfg.chat_id,
+        "admin_ids":   bot_cfg.admin_ids,
+        "prom":        prom,
+        "tn":          tn,
+        "send_report": functools.partial(
+            send_report, bot, bot_cfg.chat_id, prom, tn, sched_cfg.timezone
+        ),
+    })
+
+    application.add_handler(CommandHandler("help",   cmd_help))
+    application.add_handler(CommandHandler("report", cmd_report))
+    application.add_handler(CommandHandler("alerts", cmd_alerts))
+    application.add_handler(CommandHandler("restic", cmd_restic))
+
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling(drop_pending_updates=True)
+    logger.info("Команды бота: /report /alerts /restic /help")
+
     webhook_runner = await start_webhook_server(bot, bot_cfg.chat_id, sched_cfg.webhook_port)
 
     scheduler = AsyncIOScheduler(timezone=sched_cfg.timezone)
@@ -139,6 +158,9 @@ async def main():
     finally:
         scheduler.shutdown()
         await webhook_runner.cleanup()
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
         await prom.close()
         await tn.close()
 
