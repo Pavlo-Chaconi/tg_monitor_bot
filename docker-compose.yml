@@ -1,0 +1,8 @@
+services:
+  bot:
+    build: .
+    container_name: tg_monitor_bot
+    restart: unless-stopped
+    env_file: .env
+    # Бот не слушает входящие соединения, сеть нужна только для исходящих запросов
+    network_mode: host

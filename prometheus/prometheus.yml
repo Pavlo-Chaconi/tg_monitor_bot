@@ -1,0 +1,19 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # node_exporter на том же хосте, где запущен docker-compose.monitoring.yml
+  - job_name: "node"
+    static_configs:
+      - targets:
+          - "localhost:9100"   # этот хост
+          # Добавьте сюда остальные серверы:
+          # - "192.168.1.11:9100"
+          # - "192.168.1.12:9100"
+
+  # Если TrueNAS имеет node_exporter (плагин TrueNAS-exporter или встроенный)
+  # - job_name: "truenas"
+  #   static_configs:
+  #     - targets:
+  #         - "truenas.local:9100"
